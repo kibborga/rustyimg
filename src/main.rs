@@ -1,130 +1,100 @@
-use imgproc_rs::image::{BaseImage, Image, ImageInfo};
-use imgproc_rs::io;
-use std::env;
-use std::ffi::OsStr;
-use std::fs;
-use std::path::Path;
+#[macro_use]
+extern crate lazy_static;
+
+
+pub mod config;
+pub mod rustyimg;
+pub mod imageaction;
+pub mod rustyexif;
+
+use imageaction::*;
+
+#[macro_export]
+macro_rules! log {
+    ($($arg:tt)*) => ({
+        if config::option("verbose", "false") == "true" || config::option("debug", "false") == "true" {
+            println!($($arg)*);
+        }
+    })
+}
+
+#[macro_export]
+macro_rules! debug {
+    ($($arg:tt)*) => ({
+        if config::option("debug", "false") == "true" {
+            println!($($arg)*);
+        }
+    })
+}
 
 fn main() {
-    println!("RustyBW v.0.1.0");
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        println!("Usage: rustybw <filename> [<suffix>|overwrite] [verbose]");
+    // parse command line arguments and get the options
+    let opts = config::get();
+
+    if opts.error == true {
         return;
     }
 
-    let src_file = &args[1];
-    let suffix = if args.len() > 2 { &args[2] } else { "bw" };
-    let verbose = if args.len() > 3 { &args[3] } else { "" };
-
-    let ext = get_filename_extension(src_file);
+    let ext = get_filename_extension(&opts.src_file);
     let mut count = 0;
+    let filter: Vec<String>;
+
+    if opts.action == "convert-heic" {
+        // remove jpeg files from the filter
+        filter = Vec::from([String::from("heic")]);
+    } else {
+        filter = Vec::from([
+            String::from("jpg"),
+            String::from("jpeg"),
+            String::from("heic"),
+        ]);
+    }
+
     if ext.is_none() {
-
-        let files = get_files_in_folder(src_file);
-
-        if verbose == "verbose" {
-            println!("Found {} files", files.len());
-        }
-
+        let files = get_files_in_folder(&opts.src_file, filter);
+        let total = files.len();
+        let mut current = 0;
+        println!("Processing {} files...", total);
         for file in files {
-            count = count + convert_image(&file, suffix, verbose);
+            log!("Processing {} ({} to go)", file, total - current);
+            count = count + process_image(&file, &opts);
+            current = current + 1;
         }
-
     } else {
-        count = count + convert_image(src_file, suffix, verbose);
+        count = count + process_image(&opts.src_file, &opts);
     }
-    println!("Converted {} images", count);
-
+    println!("=====================");
+    println!("Processed {} images", count);
 }
 
-fn get_filename_extension(filename: &str) -> Option<&str> {
-    Path::new(filename).extension().and_then(OsStr::to_str)
-}
-
-fn get_files_in_folder(folder: &str) -> Vec<String> {
-    let mut files = Vec::new();
-    for entry in fs::read_dir(folder).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.is_file() {
-            files.push(path.to_str().unwrap().to_string());
-        }
-    }
-    files
-}
-
-fn convert_image(src_file: &str, suffix: &str, verbose: &str) -> u8 {
-    // get the file name, directory and extension
-    let base_name = Path::new(src_file).file_stem().unwrap();
-    let dir_name = Path::new(src_file).parent().unwrap();
-    let ext = get_filename_extension(src_file);
-    if ext != Some("jpg") && ext != Some("jpeg") {
-        if verbose == "verbose" {
-            println!(" > Skipping file {}", base_name.to_str().unwrap());
-        }
+/**
+ * Processes a single image according to the action
+ */
+fn process_image(src_file: &String, opts: &ConfigOptions) -> u8 {
+    // skip non-jpeg files
+    let ext = get_filename_extension(&src_file).unwrap_or("");
+    if ext.to_lowercase() != "jpg" && ext.to_lowercase() != "jpeg" && ext.to_lowercase() != "heic" {
         return 0;
     }
 
-    // read the image
-    let img = io::read(src_file).unwrap();
-    let (width, height) = img.info().wh();
-    if verbose == "verbose" {
-        println!("Read {}, size: {}x{}", base_name.to_str().unwrap(), width, height);
-    }
-    // check if the image is grayscale
-    let info = img.info();
-    if info.channels == 1 {
-        if verbose == "verbose" {
-            println!(" > Image is already grayscale");
-        }
-        return 0;
-    }
-
-    // detect if the image is color
-    let mut is_color = false;
-    for x in 0..width {
-        for y in 0..height {
-            let pixel = img.get_pixel(x, y);
-            let (r1, g1, b1) = (pixel[0], pixel[1], pixel[2]);
-            if r1 != g1 || r1 != b1 {
-                is_color = true;
-                break;
-            }
-        }
-    }
-    if is_color && suffix == "overwrite" {
-        if verbose == "verbose" {
-            println!(" > Skipping color image");
-        }
-        return 0;
-    }
-
-    // copy image data to new image
-    let mut img2 = Image::blank(ImageInfo::new(width, height, 1, false));
-    // convert to grayscale
-    for x in 0..width {
-        for y in 0..height {
-            let pixel = img.get_pixel(x, y);
-            let (r1, g1, b1) = (pixel[0], pixel[1], pixel[2]);
-            let r = r1 as f32 * 0.299 as f32;
-            let g = b1 as f32 * 0.587 as f32;
-            let b = g1 as f32 * 0.114 as f32;
-            let gray32 = r + g + b;
-            let gray = gray32 as u8;
-            img2.set_pixel(x, y, &[gray]);
-        }
-    }
-
-    // write as <filename>_bw.<ext>
-    let dst_file;
-    if suffix == "overwrite" {
-        dst_file = src_file.to_string();
+    let mut result: u8 = 0;
+    // execute the requested action
+    if opts.action == "grayscale" {
+        result = convert_to_grayscale(&src_file, &opts);
+    } else if opts.action == "fix-jpeg-ext" && ext.to_lowercase() != "jpeg" {
+        result = rename_jpeg_file(&src_file);
+    } else if opts.action == "auto-contrast" {
+        result = auto_contrast(&src_file, &opts);
+    } else if opts.action == "print-exif" {
+        result = print_exif_data(&src_file);
+    } else if opts.action == "convert-heic" {
+        result = convert_heic(&src_file, &opts);
+    } else if opts.action == "set-date" {
+        result = set_exif_date(&src_file);
+    } else if opts.action == "set-artist" {
+        result = set_artist_name(&src_file);
     } else {
-        dst_file = format!("{}/{}_{}.{}", dir_name.to_str().unwrap(), base_name.to_str().unwrap(), suffix, ext.unwrap());
+        panic!("Unknown action {}", opts.action);
     }
-
-    io::write(&img2, &dst_file).expect("Failed to write image");
-    println!(" > Saved as {}", dst_file);
-    return 1;
+    return result;
 }
