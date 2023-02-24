@@ -233,7 +233,7 @@ pub mod imageaction {
             panic!("No date specified");
         }
 
-        let exif = rustyexif::read_exif_from_file(src_file);
+        // let exif = rustyexif::read_exif_from_file(src_file);
 
         let date = format!("{} 12:00:00", sdate.replace("-", ":"));
 
@@ -244,14 +244,15 @@ pub mod imageaction {
             "DateTimeDigitized",
             "DateTime",
             "CreateDate",
+            "ModifyDate",
             "SubSecCreateDate",
             "GPSDateTime",
         ];
 
         for tag in tags.iter() {
-            if exif.iter().find(|&f| f.name == *tag).is_none() {
-                continue;
-            }
+            // if exif.iter().find(|&f| f.name == *tag).is_none() {
+            //     continue;
+            // }
             fields.push(ExifField {
                 name: tag.to_string(),
                 value: date.clone(),
