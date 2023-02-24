@@ -77,24 +77,23 @@ fn process_image(src_file: &String, opts: &ConfigOptions) -> u8 {
         return 0;
     }
 
-    let mut result: u8 = 0;
     // execute the requested action
     if opts.action == "grayscale" {
-        result = convert_to_grayscale(&src_file, &opts);
+        return convert_to_grayscale(&src_file, &opts);
     } else if opts.action == "fix-jpeg-ext" && ext.to_lowercase() != "jpeg" {
-        result = rename_jpeg_file(&src_file);
+        return rename_jpeg_file(&src_file);
     } else if opts.action == "auto-contrast" {
-        result = auto_contrast(&src_file, &opts);
+        return auto_contrast(&src_file, &opts);
     } else if opts.action == "print-exif" {
-        result = print_exif_data(&src_file);
+        return print_exif_data(&src_file);
     } else if opts.action == "convert-heic" {
-        result = convert_heic(&src_file, &opts);
+        return convert_heic(&src_file, &opts);
     } else if opts.action == "set-date" {
-        result = set_exif_date(&src_file);
+        return set_exif_date(&src_file);
     } else if opts.action == "set-artist" {
-        result = set_artist_name(&src_file);
+        return set_artist_name(&src_file);
     } else {
         panic!("Unknown action {}", opts.action);
     }
-    return result;
+
 }

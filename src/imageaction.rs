@@ -109,7 +109,7 @@ pub mod imageaction {
     pub fn convert_to_grayscale(src_file: &str, opts: &ConfigOptions) -> u8 {
         match get_dest_name(&src_file, &opts) {
             Some(result) => {
-                let (dst_file, base_name, _dir_name, ext) = result;
+                let (dst_file, _base_name, _dir_name, ext) = result;
                 let img = match read_image(src_file, &ext) {
                     Some(i) => i,
                     None => {
