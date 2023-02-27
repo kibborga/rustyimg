@@ -1,11 +1,9 @@
 pub mod rustyimg {
 
     use imgproc_rs::image::{BaseImage, Image, ImageInfo};
-    // use imgproc_rs::enums::White;
-
     pub use crate::config::*;
-    // use crate::{debug, log};
 
+    // process the image
     pub fn process_image(img: &Image<u8>, opts: &ConfigOptions) -> Image<u8> {
         let (width, height, channels) = img.info().whc();
         let mut img2;
@@ -65,16 +63,19 @@ pub mod rustyimg {
                     }
 
                     if n == 1 {
+                        // is grayscale image
                         if opts.invert {
                             value = 255 - value;
                         }
                         img2.set_pixel(xi, yi, &[value]);
                     } else {
                         if to_gray {
+                            // convert to grayscale
                             let (r1, g1, b1) = (pixel[0], pixel[1], pixel[2]);
                             let r = r1 as f32 * 0.299 as f32;
                             let g = b1 as f32 * 0.587 as f32;
                             let b = g1 as f32 * 0.114 as f32;
+
                             value = if opts.invert {
                                 255 - (r + g + b) as u8
                             } else {
@@ -82,11 +83,12 @@ pub mod rustyimg {
                             };
                             img2.set_pixel(xi, yi, &[value]);
                         } else {
-                            tpixel[i] = value;
+                            tpixel[i] = if opts.invert { 255 - value } else { value };
                         }
                     }
                 }
                 if !to_gray {
+                    // is color image
                     img2.set_pixel(xi, yi, &tpixel);
                 }
             }
@@ -107,6 +109,7 @@ pub mod rustyimg {
         return channel_data;
     }
 
+    // extracts a single channel from an image
     fn get_channel_ranges(img: &Image<u8>, channel: usize) -> (u8, u8) {
         let channel_data = get_channel(img, channel);
         let min = channel_data.iter().min().unwrap();
@@ -114,12 +117,13 @@ pub mod rustyimg {
         return (*min, *max);
     }
 
+    // check if the source image is grayscale
     pub fn is_grayscale_image(img: &Image<u8>) -> bool {
         let (_width, _height, channels) = img.info().whc();
         return channels == 1;
     }
 
-    // check if the image is not grayscale
+    // check if the source image is not grayscale but is RGB
     pub fn is_color_grayscale(img: &Image<u8>) -> bool {
         let pixels = img.data();
         let prc1 = pixels.len() as f32 / 200.0 as f32;

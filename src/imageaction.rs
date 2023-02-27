@@ -122,7 +122,7 @@ pub mod imageaction {
         if artist == "" {
             panic!("No artist specified.");
         }
-        debug!("Artist passed: {}", artist);
+        debug!(" > Artist passed: {}", artist);
 
         let year;
         if date != "" {
@@ -131,7 +131,7 @@ pub mod imageaction {
             year = extract_image_year(src_file);
         }
 
-        // TODO: validate year
+        debug!(" > Year: {}", year);
 
         let copyright = format!("© {} {}", year, artist);
         let mut fields = Vec::new();
@@ -158,7 +158,7 @@ pub mod imageaction {
      */
     pub fn set_exif_date(src_file: &str, copy_tags: Vec<ExifField>) -> u8 {
         let sdate = config::option("date", "");
-        debug!("Date passed: {}", sdate);
+        debug!(" > Date passed: {}", sdate);
         if sdate == "" {
             panic!("No date specified");
         }
@@ -260,6 +260,9 @@ pub mod imageaction {
         return year;
     }
 
+    /**
+     * Changes JPEG file extension to JPG
+     */
     pub fn rename_jpeg_file(src_file: &str) -> u8 {
         let base_name = Path::new(&src_file).file_stem().unwrap().to_str().unwrap();
         let dir_name = Path::new(&src_file).parent().unwrap().to_str().unwrap();
@@ -273,6 +276,9 @@ pub mod imageaction {
         return 1;
     }
 
+    /**
+     * Attempts to read an image from a file
+     */
     pub fn read_image(src_file: &str, ext: &str) -> Option<Image<u8>> {
         if ext.to_lowercase() == "heic" {
             let ctx = match HeifContext::read_from_file(src_file) {
@@ -314,6 +320,9 @@ pub mod imageaction {
         }
     }
 
+    /**
+     * Saves an image to a file, preserving EXIF data if possible
+     */
     pub fn save_image(img: &Image<u8>, src_file: &str, dst_file: &str, opts: &ConfigOptions) -> u8 {
         let target = dst_file.replace(".heic", ".jpg");
 
@@ -367,6 +376,9 @@ pub mod imageaction {
         Path::new(filename).extension().and_then(OsStr::to_str)
     }
 
+    /**
+     * Returns a list of files in a folder
+     */
     pub fn get_files_in_folder(folder: &str, filter: Vec<String>) -> Vec<String> {
         let mut files = Vec::new();
         for entry in fs::read_dir(folder).unwrap() {
@@ -383,14 +395,16 @@ pub mod imageaction {
         files
     }
 
+    /**
+     * Renames a file
+     */
     pub fn rename_file(src_file: &str, dst_file: &str) {
         fs::rename(src_file, dst_file).unwrap();
     }
 
-    // pub fn  remove_file(file: &str) {
-    //     fs::remove_file(file).unwrap();
-    // }
-
+    /**
+     * Constructs a destination file name from a source file name and options
+     */
     pub fn get_dest_name(
         src_file: &str,
         opts: &ConfigOptions,
