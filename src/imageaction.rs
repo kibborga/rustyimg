@@ -36,7 +36,7 @@ pub mod imageaction {
                     }
                 };
 
-                if save_image(&img, src_file, &dst_file) == 1 {
+                if save_image(&img, src_file, &dst_file, &opts) == 1 {
                     log!(" > Image converted succesfully");
                     if opts.overwrite == true {
                         match fs::remove_file(src_file) {
@@ -58,59 +58,17 @@ pub mod imageaction {
         }
     }
 
-    pub fn auto_contrast(src_file: &str, opts: &ConfigOptions) -> u8 {
-        match get_dest_name(&src_file, &opts) {
-            Some(result) => {
-                let (dst_file, _base_name, _dir_name, ext) = result;
-
-                let img = match read_image(src_file, &ext) {
-                    Some(i) => i,
-                    None => {
-                        println!("Error reading image {}", opts.src_file);
-                        return 0;
-                    }
-                };
-                // adjust the image contrast
-                let adjusted_img;
-                if rustyimg::is_grayscale_image(&img) {
-                    log!(" > Image is grayscale");
-                    adjusted_img = match rustyimg::auto_contrast_grayscale(&img) {
-                        Some(i) => i,
-                        None => {
-                            log!(" > Image is at max contrast");
-                            return 0;
-                        }
-                    };
-                } else {
-                    adjusted_img = match rustyimg::auto_contrast(&img) {
-                        Some(i) => i,
-                        None => {
-                            log!(" > Image is at max contrast");
-                            return 0;
-                        }
-                    };
-                }
-                // write to disk
-                if save_image(&adjusted_img, src_file, &dst_file) == 1 {
-                    log!(" > Adjusted contrast");
-                    return 1;
-                }
-                return 0;
-            }
-            None => {
-                return 0;
-            }
-        }
-    }
-
     /**
-     * Convert an image to grayscale and save it to a file
+     * Process an image
      */
-    pub fn convert_to_grayscale(src_file: &str, opts: &ConfigOptions) -> u8 {
+    pub fn transform_image(src_file: &str, opts: &ConfigOptions) -> u8 {
+
+
+
         match get_dest_name(&src_file, &opts) {
             Some(result) => {
                 let (dst_file, _base_name, _dir_name, ext) = result;
-                let img = match read_image(src_file, &ext) {
+                let image = match read_image(src_file, &ext) {
                     Some(i) => i,
                     None => {
                         println!("Error reading image {}", opts.src_file);
@@ -118,32 +76,25 @@ pub mod imageaction {
                     }
                 };
 
-                if rustyimg::is_grayscale_image(&img) {
-                    log!(" > Image is already grayscale");
+                if opts.grayscale && !opts.force && is_color_image(&image)  {
+                    log!(" > Skipping grayscale conversion");
                     return 0;
                 }
 
-                // detect if the image is color
-                if !opts.force {
-                    if rustyimg::is_color_image(&img) {
-                        log!(" > Skipping color image");
-                        return 0;
-                    }
-                }
+                let transformed_img = process_image(&image, opts);
 
-                let grayscale_img = rustyimg::color_to_grayscale(&img);
-                // write as <filename>_bw.<ext>
-                if save_image(&grayscale_img, src_file, &dst_file) == 1 {
-                    log!(" > Converted to grayscale");
+                if save_image(&transformed_img, src_file, &dst_file, &opts) == 1 {
+                    log!(" > Image transformed succesfully");
                     return 1;
+                } else {
+                    return 0;
                 }
-
-                return 0;
-            }
+            },
             None => {
                 return 0;
             }
         }
+
     }
 
     // * EXIF functions //
@@ -164,6 +115,108 @@ pub mod imageaction {
      */
 
     pub fn set_artist_name(src_file: &str) -> u8 {
+        let artist = config::option("artist", "");
+        let date = config::option("date", "");
+
+        if artist == "" {
+            panic!("No artist specified.");
+        }
+        debug!("Artist passed: {}", artist);
+
+        let year;
+        if date != "" {
+            year = date[0..4].to_string();
+        } else {
+            year = extract_image_year(src_file);
+        }
+
+        // TODO: validate year
+
+        let copyright = format!("© {} {}", year, artist);
+        let mut fields = Vec::new();
+
+        fields.push(ExifField {
+            name: "Artist".to_string(),
+            value: artist.clone(),
+        });
+
+        fields.push(ExifField {
+            name: "Copyright".to_string(),
+            value: copyright.clone(),
+        });
+
+        if date != "" {
+            return set_exif_date(src_file, fields);
+        } else {
+            return rustyexif::write_exif_to_file(src_file, fields);
+        }
+    }
+
+    /**
+     * Set the EXIF date of an image
+     */
+    pub fn set_exif_date(src_file: &str, copy_tags: Vec<ExifField>) -> u8 {
+        let sdate = config::option("date", "");
+        debug!("Date passed: {}", sdate);
+        if sdate == "" {
+            panic!("No date specified");
+        }
+
+        let date = format!("{} 12:00:00", sdate.replace("-", ":"));
+
+        let mut fields: Vec<ExifField> = Vec::new();
+
+        let tags = [
+            "DateTimeOriginal",
+            "DateTimeDigitized",
+            "DateTime",
+            "CreateDate",
+            "ModifyDate",
+            "SubSecCreateDate",
+            "GPSDateTime",
+        ];
+
+        for tag in tags.iter() {
+            fields.push(ExifField {
+                name: tag.to_string(),
+                value: date.clone(),
+            });
+        }
+
+        for tag in copy_tags.iter() {
+            fields.push(ExifField {
+                name: tag.name.clone(),
+                value: tag.value.clone(),
+            });
+        }
+
+        rustyexif::write_exif_to_file(src_file, fields);
+
+        let mtime = FileTime::from_unix_time(
+            chrono::NaiveDateTime::parse_from_str(&date, "%Y:%m:%d %H:%M:%S")
+                .unwrap()
+                .timestamp(),
+            0,
+        );
+
+        // set the modified date too
+        match set_file_mtime(src_file, mtime) {
+            Ok(_) => {
+                log!(" Date set succesfully to {}", date);
+                return 1;
+            }
+            Err(e) => {
+                println!("Error setting file modified date: {}", e);
+                return 0;
+            }
+        }
+    }
+
+    /**
+     * Extract the year from the EXIF data of an image
+     * for use in the copyright tag
+     */
+    fn extract_image_year(src_file: &str) -> String {
         let exif = rustyexif::read_exif_from_file(src_file);
 
         // get the exif date
@@ -201,84 +254,7 @@ pub mod imageaction {
             let date = chrono::DateTime::<chrono::Local>::from(modified);
             year = date.format("%Y").to_string();
         }
-
-        let artist = config::option("artist", "");
-        if artist == "" {
-            panic!("No artist specified.");
-        }
-
-        debug!("Artist passed: {}", artist);
-        let copyright = format!("© {} {}", year, artist);
-        let mut fields: Vec<ExifField> = Vec::new();
-
-        fields.push(ExifField {
-            name: "Artist".to_string(),
-            value: artist.clone(),
-        });
-        fields.push(ExifField {
-            name: "Copyright".to_string(),
-            value: copyright.clone(),
-        });
-
-        return rustyexif::write_exif_to_file(src_file, fields);
-    }
-
-    /**
-     * Set the EXIF date of an image
-     */
-    pub fn set_exif_date(src_file: &str) -> u8 {
-        let sdate = config::option("date", "");
-        debug!("Date passed: {}", sdate);
-        if sdate == "" {
-            panic!("No date specified");
-        }
-
-        // let exif = rustyexif::read_exif_from_file(src_file);
-
-        let date = format!("{} 12:00:00", sdate.replace("-", ":"));
-
-        let mut fields: Vec<ExifField> = Vec::new();
-
-        let tags = [
-            "DateTimeOriginal",
-            "DateTimeDigitized",
-            "DateTime",
-            "CreateDate",
-            "ModifyDate",
-            "SubSecCreateDate",
-            "GPSDateTime",
-        ];
-
-        for tag in tags.iter() {
-            // if exif.iter().find(|&f| f.name == *tag).is_none() {
-            //     continue;
-            // }
-            fields.push(ExifField {
-                name: tag.to_string(),
-                value: date.clone(),
-            });
-        }
-
-        rustyexif::write_exif_to_file(src_file, fields);
-
-        let mtime = FileTime::from_unix_time(
-            chrono::NaiveDateTime::parse_from_str(&date, "%Y:%m:%d %H:%M:%S")
-                .unwrap()
-                .timestamp(),
-            0,
-        );
-
-        // set the modified date too
-        match set_file_mtime(src_file, mtime) {
-            Ok(_) => {
-                log!(" Date set succesfully to {}", date);
-                return 1;
-            }
-            Err(e) => {
-                println!("Error setting file modified date: {}", e);
-                return 0;
-            }
-        }
+        return year;
     }
 
     pub fn rename_jpeg_file(src_file: &str) -> u8 {
@@ -293,6 +269,8 @@ pub mod imageaction {
 
         return 1;
     }
+
+
 
     pub fn read_image(src_file: &str, ext: &str) -> Option<Image<u8>> {
         if ext.to_lowercase() == "heic" {
@@ -335,14 +313,19 @@ pub mod imageaction {
         }
     }
 
-    pub fn save_image(img: &Image<u8>, src_file: &str, dst_file: &str) -> u8 {
-        let exif_fields = rustyexif::read_exif_from_file(src_file);
+    pub fn save_image(img: &Image<u8>, src_file: &str, dst_file: &str, opts: &ConfigOptions) -> u8 {
+
         let target = dst_file.replace(".heic", ".jpg");
+
         // write as <filename>_bw.<ext>
         match io::write(&img, &target) {
             Ok(_) => {
-                // copy exif data
-                return rustyexif::write_exif_to_file(&target, exif_fields);
+                if opts.noexif == false {
+                    // copy exif data
+                    let exif_fields = rustyexif::read_exif_from_file(src_file);
+                    return rustyexif::write_exif_to_file(&target, exif_fields);
+                }
+                return 1;
             }
             Err(e) => {
                 println!("Error writing image {}: {:?}", target, e);

@@ -78,18 +78,16 @@ fn process_image(src_file: &String, opts: &ConfigOptions) -> u8 {
     }
 
     // execute the requested action
-    if opts.action == "grayscale" {
-        return convert_to_grayscale(&src_file, &opts);
-    } else if opts.action == "fix-jpeg-ext" && ext.to_lowercase() != "jpeg" {
+    if opts.action == "fix-jpeg-ext" && ext.to_lowercase() != "jpeg" {
         return rename_jpeg_file(&src_file);
-    } else if opts.action == "auto-contrast" {
-        return auto_contrast(&src_file, &opts);
+    } else if opts.action == "process" {
+        return  transform_image(&src_file, &opts);
     } else if opts.action == "print-exif" {
         return print_exif_data(&src_file);
     } else if opts.action == "convert-heic" {
         return convert_heic(&src_file, &opts);
     } else if opts.action == "set-date" {
-        return set_exif_date(&src_file);
+        return set_exif_date(&src_file, Vec::new());
     } else if opts.action == "set-artist" {
         return set_artist_name(&src_file);
     } else {
