@@ -14,6 +14,18 @@ pub mod rustyimg {
         // should we convert to grayscale?
         let to_gray = opts.grayscale && !is_grayscale && opts.force;
 
+        // get the min and max values for each channel
+        let mut min = [0, 0, 0];
+        let mut max = [255, 255, 255];
+        if opts.autocontrast {
+            for index in 0..channels {
+                let i = index as usize;
+                let (min1, max1) = get_channel_ranges(img, i);
+                min[i] = min1;
+                max[i] = max1;
+            }
+        }
+
         img2 = Image::blank(ImageInfo::new(
             width,
             height,
@@ -39,6 +51,19 @@ pub mod rustyimg {
                 let mut tpixel: [u8; 3] = [0, 0, 0];
                 for i in 0..n {
                     let mut value = pixel[i];
+                    if opts.autocontrast {
+                        // ((pixel – min) / (max – min))*255 [+ min?]
+                        let adjusted: f32 =
+                            255.0 * (value - min[i]) as f32 / (max[i] - min[i]) as f32;
+                        if adjusted > 255.0 {
+                            value = 255;
+                        } else if adjusted < 0.0 {
+                            value = 0;
+                        } else {
+                            value = adjusted as u8;
+                        }
+                    }
+
                     if n == 1 {
                         if opts.invert {
                             value = 255 - value;
@@ -80,6 +105,13 @@ pub mod rustyimg {
             }
         }
         return channel_data;
+    }
+
+    fn get_channel_ranges(img: &Image<u8>, channel: usize) -> (u8, u8) {
+        let channel_data = get_channel(img, channel);
+        let min = channel_data.iter().min().unwrap();
+        let max = channel_data.iter().max().unwrap();
+        return (*min, *max);
     }
 
     pub fn is_grayscale_image(img: &Image<u8>) -> bool {

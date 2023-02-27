@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["process", "-c","-n", "-s", "PROC", "-f",  "test"],
+            "args": ["process", "-c", "-s", "PROC", "test"],
             "cwd": "${workspaceFolder}"
         },
         {
