@@ -62,9 +62,6 @@ pub mod imageaction {
      * Process an image
      */
     pub fn transform_image(src_file: &str, opts: &ConfigOptions) -> u8 {
-
-
-
         match get_dest_name(&src_file, &opts) {
             Some(result) => {
                 let (dst_file, _base_name, _dir_name, ext) = result;
@@ -76,8 +73,13 @@ pub mod imageaction {
                     }
                 };
 
-                if opts.grayscale && !opts.force && is_color_image(&image)  {
-                    log!(" > Skipping grayscale conversion");
+                if opts.grayscale && is_grayscale_image(&image) {
+                    log!(" > Image already grayscale");
+                    return 0;
+                }
+
+                if opts.grayscale && !opts.force && !is_color_grayscale(&image) {
+                    log!(" > Skipping conversion, use --force to force conversion");
                     return 0;
                 }
 
@@ -89,12 +91,11 @@ pub mod imageaction {
                 } else {
                     return 0;
                 }
-            },
+            }
             None => {
                 return 0;
             }
         }
-
     }
 
     // * EXIF functions //
@@ -164,6 +165,7 @@ pub mod imageaction {
 
         let date = format!("{} 12:00:00", sdate.replace("-", ":"));
 
+        // create a list of tags to update
         let mut fields: Vec<ExifField> = Vec::new();
 
         let tags = [
@@ -183,6 +185,7 @@ pub mod imageaction {
             });
         }
 
+        // add any passed tags
         for tag in copy_tags.iter() {
             fields.push(ExifField {
                 name: tag.name.clone(),
@@ -270,8 +273,6 @@ pub mod imageaction {
         return 1;
     }
 
-
-
     pub fn read_image(src_file: &str, ext: &str) -> Option<Image<u8>> {
         if ext.to_lowercase() == "heic" {
             let ctx = match HeifContext::read_from_file(src_file) {
@@ -314,7 +315,6 @@ pub mod imageaction {
     }
 
     pub fn save_image(img: &Image<u8>, src_file: &str, dst_file: &str, opts: &ConfigOptions) -> u8 {
-
         let target = dst_file.replace(".heic", ".jpg");
 
         // write as <filename>_bw.<ext>
@@ -323,6 +323,32 @@ pub mod imageaction {
                 if opts.noexif == false {
                     // copy exif data
                     let exif_fields = rustyexif::read_exif_from_file(src_file);
+                    if opts.grayscale {
+                        // set the color space to grayscale
+                        let mut fields = Vec::new();
+                        for field in exif_fields.iter() {
+                            if field.name == "ColorSpaceData" {
+                                fields.push(ExifField {
+                                    name: field.name.clone(),
+                                    value: "GRAY".to_string(),
+                                });
+                                continue;
+                            }
+                            if field.name == "ColorSpace" {
+                                fields.push(ExifField {
+                                    name: field.name.clone(),
+                                    value: "1".to_string(),
+                                });
+                                continue;
+                            }
+
+                            fields.push(ExifField {
+                                name: field.name.clone(),
+                                value: field.value.clone(),
+                            });
+                        }
+                        return rustyexif::write_exif_to_file(&target, fields);
+                    }
                     return rustyexif::write_exif_to_file(&target, exif_fields);
                 }
                 return 1;

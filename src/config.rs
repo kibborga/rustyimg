@@ -14,7 +14,7 @@ pub mod config {
         pub action: String,
         pub src_file: String,
         pub grayscale: bool,
-        pub autocontrast: bool,
+        //pub autocontrast: bool,
         pub verbose: bool,
         pub suffix: String,
         pub overwrite: bool,
@@ -158,16 +158,16 @@ pub mod config {
                 );
             }
 
-            if let Some(c) = args.get_one::<bool>("autocontrast") {
-                opts.insert(
-                    "autocontrast",
-                    if *c {
-                        String::from("true")
-                    } else {
-                        String::from("false")
-                    },
-                );
-            }
+            // if let Some(c) = args.get_one::<bool>("autocontrast") {
+            //     opts.insert(
+            //         "autocontrast",
+            //         if *c {
+            //             String::from("true")
+            //         } else {
+            //             String::from("false")
+            //         },
+            //     );
+            // }
 
             opts
         };
@@ -192,7 +192,7 @@ pub mod config {
             flipv: option("flipv", "false") == "true",
             noexif: option("noexif", "false") == "true",
             grayscale: option("grayscale", "false") == "true",
-            autocontrast: option("autocontrast", "false") == "true",
+            //autocontrast: option("autocontrast", "false") == "true",
         };
         return opts;
     }

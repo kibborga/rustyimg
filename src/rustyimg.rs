@@ -14,7 +14,12 @@ pub mod rustyimg {
         // should we convert to grayscale?
         let to_gray = opts.grayscale && !is_grayscale && opts.force;
 
-        img2 = Image::blank(ImageInfo::new(width, height, channels, false));
+        img2 = Image::blank(ImageInfo::new(
+            width,
+            height,
+            if to_gray { 1 } else { channels },
+            false,
+        ));
 
         for x in 0..width {
             for y in 0..height {
@@ -34,12 +39,10 @@ pub mod rustyimg {
                 let mut tpixel: [u8; 3] = [0, 0, 0];
                 for i in 0..n {
                     let mut value = pixel[i];
-
-                    if opts.invert {
-                        value = 255 - value;
-                    }
-
                     if n == 1 {
+                        if opts.invert {
+                            value = 255 - value;
+                        }
                         img2.set_pixel(xi, yi, &[value]);
                     } else {
                         if to_gray {
@@ -47,25 +50,24 @@ pub mod rustyimg {
                             let r = r1 as f32 * 0.299 as f32;
                             let g = b1 as f32 * 0.587 as f32;
                             let b = g1 as f32 * 0.114 as f32;
-                            let gray32 = r + g + b;
                             value = if opts.invert {
-                                255 - gray32 as u8
+                                255 - (r + g + b) as u8
                             } else {
-                                gray32 as u8
+                                (r + g + b) as u8
                             };
+                            img2.set_pixel(xi, yi, &[value]);
+                        } else {
+                            tpixel[i] = value;
                         }
-
-                        tpixel[i] = value;
                     }
                 }
-                if n > 1 {
+                if !to_gray {
                     img2.set_pixel(xi, yi, &tpixel);
                 }
             }
         }
         return img2;
     }
-
 
     // gets a single channel from an image
     pub fn get_channel(img: &Image<u8>, channel: usize) -> Vec<u8> {
@@ -80,21 +82,32 @@ pub mod rustyimg {
         return channel_data;
     }
 
+    pub fn is_grayscale_image(img: &Image<u8>) -> bool {
+        let (_width, _height, channels) = img.info().whc();
+        return channels == 1;
+    }
+
     // check if the image is not grayscale
-    pub fn is_color_image(img: &Image<u8>) -> bool {
-        let (width, height) = img.info().wh();
-        let mut is_color = false;
-        for x in 0..width {
-            for y in 0..height {
-                let pixel = img.get_pixel(x, y);
-                let (r1, g1, b1) = (pixel[0], pixel[1], pixel[2]);
-                if r1 != g1 || r1 != b1 {
-                    is_color = true;
-                    break;
-                }
+    pub fn is_color_grayscale(img: &Image<u8>) -> bool {
+        let pixels = img.data();
+        let prc1 = pixels.len() as f32 / 200.0 as f32;
+        let mut cnt = prc1 as u8;
+        for index in 0..pixels.len() - 3 {
+            let i = index * 3;
+            // println!("{}: {} {} {}", i, pixels[i], pixels[i + 1], pixels[i + 2]);
+            if pixels[i] != pixels[i + 1]
+                || pixels[i] != pixels[i + 2]
+                || pixels[i + 1] != pixels[i + 2]
+            {
+                return false;
+            }
+
+            cnt = cnt - 1;
+            if cnt == 0 {
+                break;
             }
         }
-        return is_color;
+        return true;
     }
 }
 
