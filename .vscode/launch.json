@@ -1,0 +1,45 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'rustyimage'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=rustyimage",
+                    "--package=rustyimage"
+                ],
+                "filter": {
+                    "name": "rustyimage",
+                    "kind": "bin"
+                }
+            },
+            "args": ["process", "-c","-n", "-s", "PROC", "-f",  "test"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'rustyimage'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=rustyimage",
+                    "--package=rustyimage"
+                ],
+                "filter": {
+                    "name": "rustyimage",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
